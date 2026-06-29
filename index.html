@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Galaxy Sampler Playground</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #1a1a1a; line-height: 1.6; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+    h1 { font-size: 32px; font-weight: 700; margin-bottom: 12px; color: #000; }
+    h2 { font-size: 24px; font-weight: 600; margin-bottom: 20px; margin-top: 40px; color: #000; }
+    h3 { font-size: 18px; font-weight: 600; margin-bottom: 12px; color: #1a1a1a; }
+    p { margin-bottom: 16px; color: #333; }
+    a { color: #0066cc; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-family: 'Monaco', monospace; font-size: 13px; color: #0066cc; }
+    pre { background: #f0f0f0; padding: 16px; border-radius: 6px; overflow-x: auto; margin-bottom: 16px; font-size: 12px; line-height: 1.5; }
+    pre code { background: none; padding: 0; color: #1a1a1a; }
+    ul { margin-left: 20px; margin-bottom: 16px; }
+    li { margin-bottom: 8px; color: #333; }
+    .hero { padding: 60px 20px; text-align: center; }
+    .hero h1 { font-size: 40px; margin-bottom: 16px; }
+    .hero-subtitle { font-size: 18px; color: #666; margin-bottom: 30px; }
+    .divider { height: 1px; background: #ddd; margin: 40px 0; }
+    .info-box { background: rgba(0, 102, 204, 0.05); border-left: 2px solid #0066cc; padding: 12px 16px; margin: 16px 0; border-radius: 4px; font-size: 13px; line-height: 1.6; color: #333; }
+    .playground { display: grid; grid-template-columns: 280px 1fr; gap: 30px; margin-bottom: 60px; }
+    .controls { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; gap: 14px; height: fit-content; }
+    .control-group { display: flex; flex-direction: column; gap: 6px; }
+    .control-label { font-size: 12px; text-transform: uppercase; color: #999; font-weight: 600; letter-spacing: 0.5px; }
+    input[type="range"] { width: 100%; padding: 0; height: 4px; cursor: pointer; accent-color: #0066cc; }
+    .range-value { font-size: 12px; color: #666; display: flex; justify-content: space-between; }
+    .range-label { font-weight: 500; }
+    .range-number { color: #0066cc; font-weight: 600; }
+    button { padding: 10px; background: transparent; border: 1px solid #0066cc; color: #0066cc; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: all 0.2s; width: 100%; }
+    button:hover { background: rgba(0, 102, 204, 0.05); }
+    .canvas-container { border: 1px solid #ddd; border-radius: 8px; overflow: hidden; position: relative; background: #00000f; }
+    canvas { display: block; width: 100%; height: 640px;  }
+
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    table th { background: #f0f0f0; padding: 12px; text-align: left; font-weight: 600; border: 1px solid #ddd; font-size: 13px; }
+    table td { padding: 12px; border: 1px solid #ddd; color: #333; font-size: 13px; }
+    footer { text-align: center; margin-top: 80px; padding-top: 30px; border-top: 1px solid #ddd; color: #999; font-size: 13px; }
+    footer a { color: #0066cc; font-weight: 500; }
+    @media (max-width: 900px) { .playground { grid-template-columns: 1fr; } .controls { order: -1; } }
+  </style>
+</head>
+<body>
+
+  <div class="hero">
+    <div class="container">
+      <h1>🌌 Galaxy Sampler</h1>
+      <p class="hero-subtitle">Parametric sampler on multidimensional polar distribution with power function</p>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <section>
+      <h2>Why Not Just Use Random?</h2>
+      <p>If you scatter stars by picking a random X and Y inside a circle, you get noise — a uniform cloud with no structure. Real galaxies aren't like that. They have arms, a bright dense core, and a gradual fade toward the edge. To generate something that looks like a galaxy rather than static, you need a sampler that knows where stars are likely to be: close to the center, along specific curved paths, with width that grows outward.</p>
+      <p>The algorithm does exactly this: it samples star positions from a shaped probability distribution in polar coordinates, where the shape is controlled by a handful of parameters. Adjust them and you go from a tight grand-design spiral to a loose irregular dwarf galaxy. The math underneath is inverse transform sampling — a standard technique for drawing from any distribution you can write down a formula for.</p>
+    </section>
+
+    <div class="divider"></div>
+
+    <section>
+      <h2>The Problem with Uniform Sampling</h2>
+      <p>If you scatter stars by drawing a random angle θ ∈ [0, 2π) and a random radius r ∈ [0, R], you don't get a disk — you get a ring. The area element in polar coordinates is r·dr·dθ, so uniform sampling in (r, θ) space underrepresents the center and overrepresents the edge. Real galaxies have the opposite profile: extremely high stellar density at the core, falling off toward the periphery.</p>
+      <p>The naive fix — sampling r from a uniform distribution and squaring it — gives a correct uniform disk but still no radial clustering. What you need is a sampler whose probability density function matches the observed luminosity profile of a spiral galaxy: heavy-tailed, arm-structured, with a steep central concentration.</p>
+      <p>This is the problem the algorithm solves. The full name — parametric sampler on multidimensional polar distribution with power function — is a precise description of the method, not marketing. It samples in polar space using a power-law transform that shapes the radial density, then applies a second power-sampled displacement in the perpendicular direction to produce arm width. Two power functions, two bunching exponents, one galaxy.</p>
+      <div class="info-box">
+        Written at 17 in GameMaker Language and sold on the YoYo Games Marketplace for $5. Ported to TypeScript/Canvas in 2026 and running as the background of <a href="https://github.com/KeeGooRoomiE/cv_hub">cv_hub</a>.
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <section>
+      <h2>How It Works</h2>
+
+      <h3>Radial Sampling via Power Transform</h3>
+      <p>The central technique is inverse transform sampling applied to a power-law distribution. To sample a random variable X with CDF F(x) = (x/R)^α, we draw u ~ Uniform(0,1) and compute x = R · u^(1/α). In the implementation this becomes:</p>
+      <pre><code>randomInterval = galaxyRadius ^ (1 / bunching)   // = R^(1/α)
+dist = (rand() * randomInterval) ^ bunching        // = (u · R^(1/α))^α</code></pre>
+      <p>With bunching α &lt; 1, the distribution concentrates near 0 — most stars land close to the center. With α &gt; 1, the distribution spreads toward R. The name "bunching" describes this directly: it controls how tightly stars bunch around the galactic core.</p>
+      <p>This is functionally equivalent to the Sérsic profile used in observational astronomy to describe galaxy luminosity distributions, where the Sérsic index n plays the role of the bunching exponent.</p>
+
+      <h3>Logarithmic Spiral Arm Placement</h3>
+      <p>Each star is assigned to an arm index in [0, numArms). The arm determines an angular offset, and the star's angle on that arm is derived directly from its radial distance:</p>
+      <pre><code>armSpacing = 2π / numArms
+angle = dist × 2 × spiralTightness + arm × armSpacing</code></pre>
+      <p>This is the parametric form of a logarithmic (equiangular) spiral: r = a·e^(b·θ), rearranged so that θ grows linearly with r. The pitch angle of the spiral — how tightly it winds — is controlled by <code>spiralTightness</code>. Real spiral galaxies have pitch angles between 5° and 35°; the Milky Way's arms sit around 12°.</p>
+      <p>The reason this produces a spiral rather than a circle is that stars at different distances are placed at different angular offsets from the arm baseline. A star at r=100 is rotated further around the center than a star at r=50, causing the arm to trail behind as distance increases.</p>
+
+      <h3>Perpendicular Displacement with Fan Rate</h3>
+      <p>A perfect logarithmic spiral is mathematically clean and visually unconvincing. Real arms have width, and that width increases with distance from the center — arms "fan out." This is handled by a second power-sampled displacement applied perpendicular to the arm direction:</p>
+      <pre><code>randomInterval2 = (galaxyRadius × displacementFactor) ^ (1 / bunching2)
+disp = (rand() × randomInterval2) ^ bunching2 / ‖(dx,dy)‖ × dist ^ fanRate
+
+x = cos(angle) × dist + dx × disp
+y = sin(angle) × dist + dy × disp</code></pre>
+      <p>The <code>dist ^ fanRate</code> term is the key: it scales displacement proportionally to distance, so inner stars are tightly constrained to the arm axis while outer stars spread freely. <code>fanRate = 0</code> gives a thin wire spiral; <code>fanRate = 1</code> gives arms that expand linearly; values above 1 produce strongly flared outer disks.</p>
+      <p>The direction vector (dx, dy) is drawn uniformly from the unit disk and normalized, so displacement is isotropic in the plane — no preferred scatter direction.</p>
+
+      <h3>Brightness and Color</h3>
+      <p>Each star's luminosity is mapped from its normalized distance to center: <code>brightness = 0.3 + 0.7 × (1 − normDist)^1.5</code>. The exponent 1.5 produces a sharp central peak matching the de Vaucouleurs r^(1/4) law qualitatively. Color follows the standard stellar population gradient: warm yellow-white at the core (old giant stars), blue-cyan in the arms (young OB associations and HII regions).</p>
+    </section>
+
+    <div class="divider"></div>
+
+    <section>
+      <h2>Playground</h2>
+      <p>All parameters update the galaxy in real time. Randomize generates a new configuration — some produce tight barred spirals, others loose flocculent disks, occasionally something that looks like nothing in the observable universe.</p>
+
+      <div class="playground">
+        <div class="controls">
+
+          <div class="control-group">
+            <div class="range-value"><span class="range-label">Stars</span><span class="range-number" id="starsVal">1800</span></div>
+            <input type="range" id="stars" min="200" max="5000" value="1800" step="100" oninput="regen()">
+          </div>
+
+          <div class="control-group">
+            <div class="range-value"><span class="range-label">Arms</span><span class="range-number" id="armsVal">4</span></div>
+            <input type="range" id="arms" min="1" max="8" value="4" step="1" oninput="regen()">
+          </div>
+
+          <div class="control-group">
+            <div class="range-value"><span class="range-label">Spiral Tightness</span><span class="range-number" id="tightVal">0.42</span></div>
+            <input type="range" id="tight" min="0.05" max="1.2" value="0.42" step="0.01" oninput="regen()">
+          </div>
+
+          <div class="control-group">
+            <div class="range-value"><span class="range-label">Bunching (density)</span><span class="range-number" id="bunchVal">0.9</span></div>
+            <input type="range" id="bunch" min="0.3" max="2.0" value="0.9" step="0.05" oninput="regen()">
+          </div>
+
+          <div class="control-group">
+            <div class="range-value"><span class="range-label">Arm Spread</span><span class="range-number" id="dispVal">0.18</span></div>
+            <input type="range" id="disp" min="0.02" max="0.6" value="0.18" step="0.01" oninput="regen()">
+          </div>
+
+          <div class="control-group">
+            <div class="range-value"><span class="range-label">Fan Rate</span><span class="range-number" id="fanVal">0.52</span></div>
+            <input type="range" id="fan" min="0.1" max="1.2" value="0.52" step="0.01" oninput="regen()">
+          </div>
+
+          <div class="control-group">
+            <div class="range-value"><span class="range-label">Radius</span><span class="range-number" id="radVal">0.38</span></div>
+            <input type="range" id="rad" min="0.1" max="0.7" value="0.38" step="0.01" oninput="regen()">
+          </div>
+
+          <div style="border-top: 1px solid #f0f0f0; padding-top: 12px;">
+            <div class="control-group">
+              <div class="range-value"><span class="range-label">Rotation Speed</span><span class="range-number" id="rotVal">1.0×</span></div>
+              <input type="range" id="rot" min="0" max="5" value="1" step="0.1" oninput="updateRot()">
+            </div>
+          </div>
+
+          <button onclick="randomize()">🎲 Randomize</button>
+        </div>
+
+        <div class="canvas-container">
+          <canvas id="canvas"></canvas>
+
+        </div>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <section>
+      <h2>Parameters Reference</h2>
+      <table>
+        <thead><tr><th>Parameter</th><th>Effect</th><th>Real Analog</th></tr></thead>
+        <tbody>
+          <tr><td><code>arms</code></td><td>Number of spiral arms</td><td>Milky Way has 4; NGC 4622 has 2</td></tr>
+          <tr><td><code>spiralTightness</code></td><td>How fast arms wind with distance</td><td>Controls pitch angle of the logarithmic spiral</td></tr>
+          <tr><td><code>bunching</code></td><td>Density falloff exponent</td><td>Sérsic index in real galaxy photometry</td></tr>
+          <tr><td><code>armSpread</code></td><td>Perpendicular scatter from arm axis</td><td>Arm width — loose in flocculent spirals, tight in grand design</td></tr>
+          <tr><td><code>fanRate</code></td><td>How much arms widen at outer edge</td><td>Flaring of outer disk</td></tr>
+          <tr><td><code>radius</code></td><td>Overall galaxy size as fraction of canvas</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <div class="divider"></div>
+
+    <section>
+      <h2>History and Generalization</h2>
+      <p>The script was written in GameMaker Language in 2016, originally for a space shooter background. At the time procedural galaxy generation in GML required either a physics engine or hand-tuned particle systems; there was no standard utility approach. The power-transform method came from thinking about how to invert a CDF without knowing the closed form — the answer being that for power-law distributions, inversion is just exponentiation.</p>
+      <p>It sold on the YoYo Games Marketplace as a reusable script for $5 with documented parameters. The documentation had to explain what "bunching" meant to game developers who had never encountered inverse transform sampling, which turned out to be a useful exercise in finding the right analogy. "How tightly the stars clump around the center" is accurate and requires no probability theory to act on.</p>
+      <p>The algorithm has no structural dependency on galaxies. It generates any point distribution where points cluster along curved paths with a radial density gradient. The same code with different parameters produces: asteroid fields (low arm count, high spread, low tightness), coral growth patterns (high arm count, low radius, high fanRate), root systems (arms = 1, high tightness, very high bunching), and city layouts radiating from a historical center. The galaxy framing is the most photogenic application, but the underlying sampler is domain-agnostic.</p>
+      <p>In 2026 the GML source was ported to TypeScript/Canvas for cv_hub with no algorithmic changes. The LCG seed function was preserved — same seed, same galaxy, across two languages and ten years.</p>
+    </section>
+
+    <footer>
+      <p>Galaxy Sampler Playground by <a href="https://github.com/KeeGooRoomiE">keegooroomie</a></p>
+      <p style="margin-top: 12px; font-size: 12px; color: #bbb;">Original GML script: DragonGameStudios, YoYo Games Marketplace, 2016 · Ported to TS/Canvas 2026 · Part of the <a href="https://github.com/KeeGooRoomiE" style="color:#bbb">Algorithms Lab</a></p>
+    </footer>
+
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    let W = 0, H = 0, galaxyRadius = 0;
+
+    let rotation = 0;
+    let lastTime = performance.now();
+    let rotSpeed = 0.000015;
+
+    const LAYERS = 3;
+    const starLayers = Array.from({ length: LAYERS }, () => []);
+    const nebulae = [];
+
+    function getConfig() {
+      return {
+        numStars:          parseInt(document.getElementById('stars').value),
+        numArms:           parseInt(document.getElementById('arms').value),
+        spiralTightness:   parseFloat(document.getElementById('tight').value),
+        bunching:          parseFloat(document.getElementById('bunch').value),
+        bunching2:         1.2,
+        displacementFactor:parseFloat(document.getElementById('disp').value),
+        fanRate:           parseFloat(document.getElementById('fan').value),
+        radiusFraction:    parseFloat(document.getElementById('rad').value),
+        nebulaCount:       5,
+      };
+    }
+
+    function seededRandom(seed) {
+      let s = seed;
+      return function () {
+        s = (s * 1664525 + 1013904223) & 0xffffffff;
+        return (s >>> 0) / 0xffffffff;
+      };
+    }
+
+    function generateGalaxy() {
+      const cfg = getConfig();
+      for (let l = 0; l < LAYERS; l++) starLayers[l].length = 0;
+      const rand = seededRandom(42);
+      const armSpacing = (Math.PI * 2) / cfg.numArms;
+      const randomInterval  = Math.pow(galaxyRadius, 1 / cfg.bunching);
+      const randomInterval2 = Math.pow(galaxyRadius * cfg.displacementFactor, 1 / cfg.bunching2);
+
+      for (let i = 0; i < cfg.numStars; i++) {
+        const arm  = Math.floor(rand() * cfg.numArms);
+        const dist = Math.pow(rand() * randomInterval, cfg.bunching);
+        const angle = dist * 2 * cfg.spiralTightness + arm * armSpacing;
+
+        let dx = rand() * 2 - 1;
+        let dy = rand() * 2 - 1;
+        const len  = Math.sqrt(dx * dx + dy * dy) || 1;
+        const disp = (Math.pow(rand() * randomInterval2, cfg.bunching2) / len)
+                   * Math.pow(dist, cfg.fanRate);
+
+        const x = Math.cos(angle) * dist + dx * disp;
+        const y = Math.sin(angle) * dist + dy * disp;
+
+        const normDist = dist / galaxyRadius;
+        const brightness = 0.3 + 0.7 * Math.pow(Math.max(0, 1 - normDist), 1.5);
+        const hue  = normDist < 0.15 ? 45  + rand() * 20 : 190 + rand() * 60;
+        const sat  = normDist < 0.15 ? 60  : 40 + rand() * 30;
+        const size = 0.4 + rand() * (normDist < 0.12 ? 1.8 : 0.9);
+        const layer = Math.floor(rand() * LAYERS);
+        starLayers[layer].push({ x, y, brightness, hue, sat, size });
+      }
+    }
+
+    function generateNebulae() {
+      const cfg = getConfig();
+      nebulae.length = 0;
+      const rand = seededRandom(99);
+      const armSpacing = (Math.PI * 2) / cfg.numArms;
+      for (let n = 0; n < cfg.nebulaCount; n++) {
+        const arm  = Math.floor(rand() * cfg.numArms);
+        const dist = galaxyRadius * (0.25 + rand() * 0.55);
+        const angle = dist * 2 * cfg.spiralTightness + arm * armSpacing;
+        nebulae.push({
+          x: Math.cos(angle) * dist,
+          y: Math.sin(angle) * dist,
+          r: galaxyRadius * (0.12 + rand() * 0.14),
+          hue:   180 + rand() * 120,
+          alpha: 0.03 + rand() * 0.04,
+        });
+      }
+    }
+
+    function resizeCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      W = canvas.width  = rect.width  * window.devicePixelRatio;
+      H = canvas.height = rect.height * window.devicePixelRatio;
+      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+      galaxyRadius = Math.min(rect.width, rect.height) * parseFloat(document.getElementById('rad').value);
+      generateGalaxy();
+      generateNebulae();
+    }
+
+    function regen() {
+      // update labels
+      document.getElementById('starsVal').textContent = document.getElementById('stars').value;
+      document.getElementById('armsVal').textContent  = document.getElementById('arms').value;
+      document.getElementById('tightVal').textContent = parseFloat(document.getElementById('tight').value).toFixed(2);
+      document.getElementById('bunchVal').textContent = parseFloat(document.getElementById('bunch').value).toFixed(2);
+      document.getElementById('dispVal').textContent  = parseFloat(document.getElementById('disp').value).toFixed(2);
+      document.getElementById('fanVal').textContent   = parseFloat(document.getElementById('fan').value).toFixed(2);
+      document.getElementById('radVal').textContent   = parseFloat(document.getElementById('rad').value).toFixed(2);
+      const rect = canvas.getBoundingClientRect();
+      galaxyRadius = Math.min(rect.width, rect.height) * parseFloat(document.getElementById('rad').value);
+      generateGalaxy();
+      generateNebulae();
+    }
+
+    function updateRot() {
+      const v = parseFloat(document.getElementById('rot').value);
+      document.getElementById('rotVal').textContent = v.toFixed(1) + '×';
+      rotSpeed = 0.000015 * v;
+    }
+
+    function randomize() {
+      document.getElementById('stars').value = Math.floor(Math.random() * 4000 + 500);
+      document.getElementById('arms').value  = Math.floor(Math.random() * 7 + 1);
+      document.getElementById('tight').value = (Math.random() * 1.0 + 0.1).toFixed(2);
+      document.getElementById('bunch').value = (Math.random() * 1.5 + 0.4).toFixed(2);
+      document.getElementById('disp').value  = (Math.random() * 0.5 + 0.05).toFixed(2);
+      document.getElementById('fan').value   = (Math.random() * 1.0 + 0.1).toFixed(2);
+      document.getElementById('rad').value   = (Math.random() * 0.4 + 0.2).toFixed(2);
+      regen();
+    }
+
+    function draw(now) {
+      const dt = now - lastTime;
+      lastTime = now;
+      rotation += rotSpeed * dt;
+
+      const cfg = getConfig();
+      const rect = canvas.getBoundingClientRect();
+      const rW = rect.width, rH = rect.height;
+
+      ctx.clearRect(0, 0, rW, rH);
+
+      const bg = ctx.createRadialGradient(rW/2, rH/2, 0, rW/2, rH/2, Math.max(rW, rH) * 0.7);
+      bg.addColorStop(0, '#05050f');
+      bg.addColorStop(1, '#00000a');
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, rW, rH);
+
+      ctx.save();
+      ctx.translate(rW / 2, rH / 2);
+      ctx.rotate(rotation);
+
+      // nebulae
+      for (const neb of nebulae) {
+        const g = ctx.createRadialGradient(neb.x, neb.y, 0, neb.x, neb.y, neb.r);
+        g.addColorStop(0, `hsla(${neb.hue},70%,60%,${neb.alpha * 2})`);
+        g.addColorStop(1, `hsla(${neb.hue},60%,40%,0)`);
+        ctx.beginPath();
+        ctx.arc(neb.x, neb.y, neb.r, 0, Math.PI * 2);
+        ctx.fillStyle = g;
+        ctx.fill();
+      }
+
+      // core glow
+      const cg = ctx.createRadialGradient(0, 0, 0, 0, 0, galaxyRadius * 0.22);
+      cg.addColorStop(0,   'rgba(255,230,160,0.18)');
+      cg.addColorStop(0.4, 'rgba(200,160,80,0.06)');
+      cg.addColorStop(1,   'rgba(0,0,0,0)');
+      ctx.beginPath();
+      ctx.arc(0, 0, galaxyRadius * 0.22, 0, Math.PI * 2);
+      ctx.fillStyle = cg;
+      ctx.fill();
+
+      // stars
+      for (let l = 0; l < LAYERS; l++) {
+        for (const s of starLayers[l]) {
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+          ctx.fillStyle = `hsla(${s.hue},${s.sat}%,${70 + s.brightness * 30}%,${s.brightness})`;
+          ctx.fill();
+        }
+      }
+
+      ctx.restore();
+      requestAnimationFrame(draw);
+    }
+
+    window.addEventListener('resize', () => {
+      const rect = canvas.getBoundingClientRect();
+      canvas.width  = rect.width  * window.devicePixelRatio;
+      canvas.height = rect.height * window.devicePixelRatio;
+      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+      galaxyRadius = Math.min(rect.width, rect.height) * parseFloat(document.getElementById('rad').value);
+      generateGalaxy();
+      generateNebulae();
+    });
+
+    resizeCanvas();
+    requestAnimationFrame(draw);
+  </script>
+
+</body>
+</html>
